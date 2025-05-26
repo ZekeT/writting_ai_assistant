@@ -1,0 +1,16 @@
+[tool.interrogate]
+verbose = 2
+fail-under = 100
+ignore-module = true
+ignore-init-module = true
+
+[tool.autoflake]
+in-place = true
+remove-unused-variables = true
+recursive = true
+
+[tool.isort]
+profile = "black"
+
+[tool.black]
+line-length = 88
