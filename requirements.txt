@@ -11,6 +11,8 @@ langchain-openai
 google-generativeai
 langchain-google-genai
 
+docx2txt
+
 # Other dependencies
 pylint
 pycodestyle

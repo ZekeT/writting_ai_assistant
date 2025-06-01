@@ -1,11 +1,10 @@
-from backend.llm_interface import LLMInterface, LLMProvider
+from backend.llm_interface import LLMInterface
 from backend.session_manager import SessionManager
 from backend.database import get_db_instance
 import streamlit as st
 import sys
 import os
 import json
-from datetime import datetime
 
 # Add the parent directory to the path to import backend modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -16,13 +15,15 @@ def get_drafts_for_current_publication():
     db = get_db_instance()
     publication_id = st.session_state.current_publication['id']
     draft_date = st.session_state.current_draft_date
+    # None for now, until login is implemented
+    user_id = st.session_state.get('user_id')
 
-    return db.get_drafts_by_date_and_publication(publication_id, draft_date)
+    return db.get_drafts_by_date_and_publication(publication_id, draft_date, user_id)
 
 
 def get_current_draft_content():
-    """Get content of the current draft"""
-    if not st.session_state.current_draft_id:
+    """Get the content of the current draft"""
+    if not hasattr(st.session_state, 'current_draft_id') or not st.session_state.current_draft_id:
         return ""
 
     db = get_db_instance()
@@ -31,150 +32,136 @@ def get_current_draft_content():
     if not draft:
         return ""
 
-    return draft.get('content', '')
+    return draft['content'] or ""
 
 
 def save_draft_content(content):
-    """Save content of the current draft"""
-    if not st.session_state.current_draft_id:
-        return
+    """Save the content of the current draft"""
+    if not hasattr(st.session_state, 'current_draft_id') or not st.session_state.current_draft_id:
+        return False
 
     db = get_db_instance()
-    db.update_draft(st.session_state.current_draft_id, content=content)
+    return db.update_draft(st.session_state.current_draft_id, content=content)
 
 
 def save_current_draft():
-    """Save the current draft"""
-    if not st.session_state.current_draft_id:
-        st.warning("No draft selected")
-        return
-
-    content = st.session_state.draft_content_area
-    db = get_db_instance()
-    success = db.update_draft(
-        st.session_state.current_draft_id, content=content)
-
-    if success:
-        st.success("Draft saved successfully")
+    """Save the current draft explicitly"""
+    if save_draft_content(st.session_state.draft_content_area):
+        st.success("Draft saved successfully!")
     else:
-        st.error("Failed to save draft")
+        st.error("Failed to save draft.")
 
 
 def approve_current_draft():
-    """Approve the current draft"""
-    if not st.session_state.current_draft_id:
-        st.warning("No draft selected")
-        return
+    """Mark the current draft as approved"""
+    if not hasattr(st.session_state, 'current_draft_id') or not st.session_state.current_draft_id:
+        st.error("No draft selected.")
+        return False
 
     db = get_db_instance()
-    success = db.update_draft(st.session_state.current_draft_id, approved=True)
-
-    if success:
-        st.success("Draft approved")
+    if db.update_draft(st.session_state.current_draft_id, approved=True):
+        st.success("Draft approved!")
+        return True
     else:
-        st.error("Failed to approve draft")
+        st.error("Failed to approve draft.")
+        return False
 
 
-def create_new_draft(title, provider=None):
-    """Create a new draft with LangGraph memory"""
+def create_new_draft(title):
+    """Create a new draft"""
     db = get_db_instance()
     publication_id = st.session_state.current_publication['id']
-    publication_name = st.session_state.current_publication['name']
     draft_date = st.session_state.current_draft_date
+    # None for now, until login is implemented
+    user_id = st.session_state.get('user_id')
 
-    # Initialize LLM interface with LangGraph memory and specified provider
-    llm = LLMInterface(provider=provider)
+    # Get included articles content for context
+    articles_context = db.get_included_articles_content(
+        publication_id, draft_date)
 
-    # Generate draft content with LangGraph memory
-    try:
-        # Generate initial draft content and memory
-        content, memory_json = llm.generate_draft(
-            publication_name,
+    # Initialize LLM with context
+    llm = LLMInterface()
+
+    # Generate initial content if articles are available
+    initial_content = ""
+    memory_context = None
+
+    if articles_context:
+        # Use LLM to generate initial content based on articles
+        initial_content, memory_context = llm.generate_draft(
+            st.session_state.current_publication['name'],
             draft_date,
-            f"Create a draft for {publication_name} on {draft_date}"
+            articles_context
         )
 
-        # Create draft in database with memory context
-        draft_id = db.create_draft(
-            title,
-            publication_id,
-            draft_date,
-            content=content,
-            memory_context=memory_json
-        )
+    # Create the draft
+    draft_id = db.create_draft(
+        title, publication_id, draft_date, user_id, initial_content, memory_context
+    )
 
-        if draft_id:
-            st.success(
-                f"Draft '{title}' created successfully using {llm.provider} provider")
-            SessionManager.set_current_draft(draft_id)
-            return True
-        else:
-            st.error("Failed to create draft")
-            return False
-
-    except Exception as e:
-        st.error(f"Error creating draft: {str(e)}")
+    if draft_id:
+        # Set as current draft
+        SessionManager.set_current_draft(draft_id)
+        st.success(f"Draft '{title}' created successfully!")
+        return True
+    else:
+        st.error("Failed to create draft.")
         return False
 
 
 def rename_draft(draft_id, new_title):
     """Rename a draft"""
     db = get_db_instance()
-    success = db.update_draft(draft_id, title=new_title)
-
-    if success:
-        st.success(f"Draft renamed to '{new_title}'")
+    if db.update_draft(draft_id, title=new_title):
+        st.success(f"Draft renamed to '{new_title}'.")
         return True
     else:
-        st.error("Failed to rename draft")
+        st.error("Failed to rename draft.")
         return False
 
 
 def delete_draft(draft_id):
     """Delete a draft"""
     db = get_db_instance()
-    success = db.delete_draft(draft_id)
+    if db.delete_draft(draft_id):
+        # If the deleted draft was the current one, clear the current draft
+        if hasattr(st.session_state, 'current_draft_id') and st.session_state.current_draft_id == draft_id:
+            st.session_state.current_draft_id = None
 
-    if success:
-        st.success("Draft deleted")
-        # If the deleted draft was the current one, reset current draft
-        if st.session_state.current_draft_id == draft_id:
-            SessionManager.set_current_draft(None)
+        st.success("Draft deleted successfully.")
         return True
     else:
-        st.error("Failed to delete draft")
+        st.error("Failed to delete draft.")
         return False
 
 
 def copy_draft(draft_id, new_title):
-    """Copy a draft with its memory context"""
+    """Create a copy of a draft"""
     db = get_db_instance()
     original_draft = db.get_draft_by_id(draft_id)
 
     if not original_draft:
-        st.error("Original draft not found")
+        st.error("Original draft not found.")
         return False
 
-    publication_id = original_draft['publication_id']
-    draft_date = original_draft['draft_date']
-    content = original_draft['content']
-    memory_context = original_draft['memory_context']
-
-    # Create a copy with the same content and memory context
+    # Create a new draft with the same content
     new_draft_id = db.create_draft(
         new_title,
-        publication_id,
-        draft_date,
-        content=content,
-        memory_context=memory_context
+        original_draft['publication_id'],
+        original_draft['draft_date'],
+        original_draft.get('user_id'),
+        original_draft['content'],
+        json.loads(original_draft['memory_context']) if original_draft.get(
+            'memory_context') else None
     )
 
     if new_draft_id:
-        st.success(f"Draft copied as '{new_title}'")
+        # Set as current draft
         SessionManager.set_current_draft(new_draft_id)
+        st.success(f"Draft copied as '{new_title}'.")
         return True
     else:
-        st.error("Failed to copy draft")
+        st.error("Failed to copy draft.")
         return False
 
 
@@ -186,13 +173,13 @@ def get_draft_title(draft_id):
     if not draft:
         return ""
 
-    return draft.get('title', '')
+    return draft['title']
 
 
-def process_ai_chat(user_input, provider=None):
-    """Process chat with AI using LangGraph memory"""
-    if not st.session_state.current_draft_id:
-        return "Please select a draft first to enable chat functionality."
+def process_ai_chat(user_input):
+    """Process a chat message with the AI assistant"""
+    if not hasattr(st.session_state, 'current_draft_id') or not st.session_state.current_draft_id:
+        return "Please select a draft first to chat with the AI assistant."
 
     db = get_db_instance()
     draft = db.get_draft_by_id(st.session_state.current_draft_id)
@@ -200,65 +187,48 @@ def process_ai_chat(user_input, provider=None):
     if not draft:
         return "Error: Draft not found."
 
-    try:
-        # Get memory context from draft
-        memory_context = draft.get('memory_context')
+    # Get memory context from draft
+    memory_context = json.loads(draft['memory_context']) if draft.get(
+        'memory_context') else None
 
-        # Initialize LLM interface with specified provider
-        llm = LLMInterface(provider=provider)
-
-        # Process chat with LangGraph memory
-        response, updated_memory = llm.process_chat(user_input, memory_context)
-
-        # Update draft with new memory context
-        db.update_draft(st.session_state.current_draft_id,
-                        memory_context=updated_memory)
-
-        # Get the provider that was actually used (might be from memory)
-        used_provider = llm.provider
-
-        return f"{response}\n\n_Using {used_provider} provider_"
-
-    except Exception as e:
-        error_message = f"Error processing chat: {str(e)}"
-        print(error_message)  # Log the error
-        return f"I encountered an error while processing your request. Please try again or contact support if the issue persists."
-
-
-def get_memory_summary(draft_id):
-    """Get a summary of the LangGraph memory for a draft"""
-    db = get_db_instance()
-    draft = db.get_draft_by_id(draft_id)
-
-    if not draft or not draft.get('memory_context'):
-        return {
-            "publication_type": "Unknown",
-            "draft_date": "Unknown",
-            "message_counts": {"total": 0, "human": 0, "ai": 0, "system": 0},
-            "has_draft": False,
-            "llm_provider": "Unknown"
-        }
-
-    try:
-        # Initialize LLM interface
-        llm = LLMInterface()
-
-        # Get memory summary
-        return llm.get_memory_summary(draft.get('memory_context'))
-
-    except Exception as e:
-        print(f"Error getting memory summary: {str(e)}")
-        return {
-            "error": str(e),
-            "publication_type": "Error",
-            "draft_date": "Error",
-            "message_counts": {"total": 0, "human": 0, "ai": 0, "system": 0},
-            "has_draft": False,
-            "llm_provider": "Unknown"
-        }
-
-
-def get_available_providers():
-    """Get available LLM providers"""
+    # Use LLM interface with the memory context
     llm = LLMInterface()
-    return llm.get_available_providers()
+    response, updated_memory = llm.chat_response(user_input, memory_context)
+
+    # Update memory context in database
+    db.update_draft(st.session_state.current_draft_id,
+                    memory_context=updated_memory)
+
+    return response
+
+# Article-related functions
+
+
+def get_articles_for_current_publication():
+    """Get articles for the current publication and date"""
+    db = get_db_instance()
+    publication_id = st.session_state.current_publication['id']
+    article_date = st.session_state.current_draft_date
+
+    return db.get_articles_by_date_and_publication(publication_id, article_date)
+
+
+def toggle_article_inclusion(article_id, included):
+    """Toggle whether an article is included in the context"""
+    db = get_db_instance()
+    if db.update_article_inclusion(article_id, included):
+        return True
+    else:
+        st.error("Failed to update article inclusion state.")
+        return False
+
+
+def get_article_content(article_id):
+    """Get the content of an article"""
+    db = get_db_instance()
+    article = db.get_article_by_id(article_id)
+
+    if not article:
+        return "Article not found."
+
+    return article['content']

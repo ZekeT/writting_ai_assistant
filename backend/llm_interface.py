@@ -95,7 +95,7 @@ class LLMInterface:
 
         return api_keys
 
-    def generate_draft(self, publication_type: str, draft_date: str, user_prompt: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
+    def generate_draft(self, publication_type: str, draft_date: str, user_prompt: Optional[str] = None):
         """
         Generate a draft with LangGraph memory.
 
@@ -138,7 +138,7 @@ class LLMInterface:
 
         return draft_content, serialized_memory
 
-    def process_chat(self, user_input: str, memory_json: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
+    def process_chat(self, user_input: str, memory_json: Optional[str] = None):
         """
         Process a chat message using LangGraph memory.
 
@@ -185,6 +185,36 @@ class LLMInterface:
             updated_memory)
 
         return ai_response, serialized_memory
+
+    def chat_response(self, user_input: str, memory_context: Optional[Dict[str, Any]] = None):
+        """
+        Process a chat message and return a response.
+        This is a wrapper around process_chat that handles memory serialization.
+
+        Args:
+            user_input: User's chat message
+            memory_context: Optional memory context (can be serialized or deserialized)
+
+        Returns:
+            Tuple of (ai_response, updated_memory_context)
+        """
+        # Convert memory_context to JSON string if it's a dict
+        memory_json = None
+        if memory_context:
+            if isinstance(memory_context, dict):
+                memory_json = json.dumps(memory_context)
+            elif isinstance(memory_context, str):
+                memory_json = memory_context
+
+        # Process the chat
+        response, updated_memory_json = self.process_chat(
+            user_input, memory_json)
+
+        # Convert memory JSON back to dict if needed
+        updated_memory = json.loads(
+            updated_memory_json) if updated_memory_json else {}
+
+        return response, updated_memory
 
     def get_memory_summary(self, memory_json: Optional[str] = None) -> Dict[str, Any]:
         """

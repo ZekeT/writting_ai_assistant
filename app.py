@@ -1,7 +1,6 @@
 from frontend.ui_components import (
     render_center_column,
     render_right_column,
-    render_copy_modal,
     render_sidebar_content
 )
 from backend.session_manager import SessionManager
