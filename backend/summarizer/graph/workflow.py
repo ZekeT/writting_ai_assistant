@@ -35,29 +35,11 @@ class LearningWorkflow:
         # Build graph
         self.graph = self._build_graph()
 
-    def _build_graph(self) -> StateGraph:
+    def _build_graph(self):
         """Build the LangGraph workflow."""
 
-        # Define state schema
-        def state_schema(state: Dict[str, Any]) -> Dict[str, Any]:
-            return {
-                "current_training_set": state.get("current_training_set"),
-                "generated_summary": state.get("generated_summary", ""),
-                "current_prompt": state.get("current_prompt", ""),
-                "evaluation_score": state.get("evaluation_score"),
-                "feedback": state.get("feedback", {}),
-                "iteration_count": state.get("iteration_count", 0),
-                "needs_refinement": state.get("needs_refinement", True),
-                "prompt_version": state.get("prompt_version", 1),
-                "set_complete": state.get("set_complete", False),
-                "all_set_results": state.get("all_set_results", []),
-                "meta_learning_complete": state.get("meta_learning_complete", False),
-                "summarizer_success": state.get("summarizer_success", False),
-                "evaluator_success": state.get("evaluator_success", False),
-                "error": state.get("error"),
-                "average_scores": state.get("average_scores", {}),
-                "meta_feedback": state.get("meta_feedback", {})
-            }
+        # Define state schema as a type (use dict for dynamic state)
+        state_schema = dict
 
         # Create graph
         workflow = StateGraph(state_schema)

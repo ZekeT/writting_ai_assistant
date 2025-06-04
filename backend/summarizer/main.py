@@ -201,10 +201,10 @@ def validate_data(data_dir):
         click.echo(f"Found {len(training_sets)} training sets:")
 
         for i, training_set in enumerate(training_sets, 1):
-            click.echo(f"\n{i}. Training Set: {training_set.name}")
+            click.echo(f"\n{i}. Training Set #{i}")
             click.echo(f"   Articles: {len(training_set.articles)}")
             click.echo(
-                f"   Expected summary length: {len(training_set.expected_summary)} characters")
+                f"   Expected summary length: {len(str(training_set.expected_summary))} characters")
 
             # Validate each article
             for j, article in enumerate(training_set.articles, 1):
@@ -218,7 +218,7 @@ def validate_data(data_dir):
                 click.echo(f"   ⚠️  Missing expected summary")
             else:
                 click.echo(
-                    f"   ✓ Expected summary: {training_set.expected_summary[:100]}...")
+                    f"   ✓ Expected summary: {str(training_set.expected_summary)[:100]}...")
 
         click.echo(
             f"\n✓ Data validation complete. Found {len(training_sets)} valid training sets.")

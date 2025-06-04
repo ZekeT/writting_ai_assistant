@@ -62,11 +62,11 @@ class SummaryEvaluator:
         )
 
         return EvaluationScore(
-            content_coverage=content_score,
-            accuracy=accuracy_score,
-            structure_score=structure_score,
-            style_consistency=style_score,
-            overall_score=overall_score,
+            content_coverage=float(content_score),
+            accuracy=float(accuracy_score),
+            structure_score=float(structure_score),
+            style_consistency=float(style_score),
+            overall_score=float(overall_score),
             detailed_feedback=feedback
         )
 
@@ -93,7 +93,7 @@ class SummaryEvaluator:
         return sections
 
     def _evaluate_content_coverage(self, generated: Dict[str, List[str]],
-                                   expected: Dict[str, List[str]]) -> float:
+                                   expected: Dict[str, List[str]]):
         """Evaluate how well the generated content covers expected topics."""
         section_scores = []
 

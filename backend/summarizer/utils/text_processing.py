@@ -23,7 +23,7 @@ class TextProcessor:
     @staticmethod
     def extract_bullet_points(text: str) -> List[str]:
         """Extract bullet points from text."""
-        bullet_pattern = r'^[\s]*[-*•]\s+(.+)
+        bullet_pattern = r'^[\s]*[-*•]\s+(.+)'
         bullets = []
         
         for line in text.split('\n'):
@@ -41,7 +41,7 @@ class TextProcessor:
     @staticmethod
     def truncate_text(text: str, max_length: int = 1000) -> str:
         """Truncate text to maximum length while preserving word boundaries."""
-        if len(text <= max_length:
+        if len(text) <= max_length:
             return text
         
         truncated = text[:max_length]
